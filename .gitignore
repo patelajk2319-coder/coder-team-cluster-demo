@@ -1,0 +1,16 @@
+# Environment — contains credentials, never commit
+.env
+
+# Terraform
+**/.terraform/
+**/*.tfstate
+**/*.tfstate.backup
+**/*.tfstate.*.backup
+**/.terraform.tfstate.lock.info
+
+# OS
+.DS_Store
+
+# IDE
+.vscode/
+.idea/

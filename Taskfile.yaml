@@ -1,0 +1,49 @@
+# Deploys a second, team-owned EKS cluster in the same VPC as coder-demo-eks,
+# and registers an external Coder provisioner on it — workspace builds tagged
+# for this team land here, while the control plane (coderd, Postgres, Secrets
+# Manager) stays on coder-demo-eks untouched.
+
+version: '3'
+
+dotenv: ['.env']
+
+tasks:
+
+  login:
+    desc: Validate AWS credentials for the configured profile/region
+    cmds:
+      - bash scripts/00_aws_login.sh
+
+  cluster:
+    desc: Deploy this team's EKS cluster (subnets in the platform VPC, EKS, CloudWatch logs)
+    cmds:
+      - bash scripts/10_deploy_cluster.sh
+
+  provisioner:
+    desc: Deploy the EBS CSI driver, gp3 StorageClass, and the Coder external provisioner
+    cmds:
+      - bash scripts/20_deploy_provisioner.sh
+
+  up:
+    desc: Full deploy — cluster, then provisioner
+    cmds:
+      - task: cluster
+      - task: provisioner
+
+  validate:
+    desc: Terraform fmt + validate for both terraform/cluster and terraform/provisioner
+    cmds:
+      - terraform -chdir=terraform/cluster fmt -check
+      - terraform -chdir=terraform/cluster validate
+      - terraform -chdir=terraform/provisioner fmt -check
+      - terraform -chdir=terraform/provisioner validate
+
+  nuke:
+    desc: Destroy this team's cluster and provisioner (control plane untouched)
+    cmds:
+      - bash scripts/tools/nuke.sh
+
+  help:
+    desc: Show all available tasks
+    cmds:
+      - task --list
