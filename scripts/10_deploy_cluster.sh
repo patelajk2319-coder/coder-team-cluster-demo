@@ -34,7 +34,7 @@ section "Writing kubeconfig..."
 # CLI/profile's default region (coder-demo-eks's eu-west-1).
 aws eks update-kubeconfig \
   --name "${CLUSTER_NAME}" \
-  --region us-west-2 \
+  --region eu-west-2 \
   --alias "${CLUSTER_NAME}-admin"
 
 info "EKS context '${CLUSTER_NAME}-admin' written to kubeconfig"

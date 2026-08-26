@@ -37,7 +37,7 @@ provider "helm" {
 
 locals {
   # Fixed, not a variable — see terraform/cluster/locals.tf.
-  aws_region = "us-west-2"
+  aws_region = "eu-west-2"
 }
 
 # Reads this repo's own terraform/cluster state — same bridging pattern

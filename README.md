@@ -8,7 +8,7 @@ workspace pods for builds tagged to it.
 
 ## Topology
 
-A genuinely separate region from `coder-demo-eks` (`us-west-2` vs. its
+A genuinely separate region from `coder-demo-eks` (`eu-west-2` vs. its
 `eu-west-1`) — its own VPC (`10.1.0.0/16`), connected back to the control
 plane by cross-region VPC peering rather than shared networking. Real
 isolation, real trade-off: this needed its own VPC/IGW/NAT (not just new

@@ -6,7 +6,7 @@ locals {
   # means no shared VPC — this repo creates its own, connected back to the
   # control plane via VPC peering (see peering.tf) rather than living inside
   # the same network.
-  aws_region = "us-west-2"
+  aws_region = "eu-west-2"
 
   common_tags = merge(var.tags, {
     region = local.aws_region
