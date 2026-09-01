@@ -17,13 +17,11 @@ subnets in an existing VPC), and the peering connection touches
 editing that repo's Terraform, but it's still a change to shared,
 live infrastructure. See `terraform/cluster/peering.tf`.
 
-**Known gap, not yet wired:** peering makes the two VPCs routable to each
-other, but the EKS cluster security group in `coder-demo-eks` doesn't yet
-allow inbound traffic from this cluster's CIDR — routes alone don't open
-anything. That's a deliberate follow-up, not an oversight: it's a security
-posture change to the live control plane and shouldn't happen without an
-explicit decision on scope (allow only the provisioner's actual port, not a
-broad rule).
+Routes alone don't open anything, so `peering.tf` also adds a scoped ingress
+rule to the control plane's NLB security group (found by tag, port 80 only,
+CIDR-restricted to this cluster) — the minimum needed for the provisioner to
+reach `coder-demo-eks`'s internal NLB, not a broad rule opening the whole
+control-plane security group.
 
 Two Terraform directories, same reasoning as `coder-demo-eks`'s
 `core-infra`/`addons` split:
