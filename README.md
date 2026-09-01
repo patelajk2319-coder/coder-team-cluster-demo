@@ -33,6 +33,23 @@ Two Terraform directories, same reasoning as `coder-demo-eks`'s
   Coder provisioner itself (official `coder-provisioner` Helm chart). Reads
   `terraform/cluster`'s state via `terraform_remote_state`.
 
+## Node capacity
+
+Nodes are `m6i.large` (2 vCPU, ~1.93 allocatable after kubelet/system reservations) —
+deliberately small to keep this cluster cheap to run idle. This is a **hard ceiling on a
+single workspace pod**, not a function of how busy the cluster is: Kubernetes never splits
+one pod across multiple nodes, so a pod's CPU *request* has to fit within one node's
+allocatable capacity by itself, regardless of what else is scheduled.
+
+`coder-template-api-python`'s `medium` size alone requests 2 vCPU for the workspace
+container — already more than one node has allocatable, before even adding the `dind`
+sidecar's 250m. Only `instance_size=small` (1 vCPU + dind's 250m = 1.25) fits. Any workspace
+routed here (`--provisioner-tag team=demo` / `PROVISIONER_TAG` in that repo's `.env`) must
+use `small`, or the build will hang for 5 minutes and fail with `FailedScheduling:
+Insufficient cpu` / a Terraform `client rate limiter Wait ... context deadline exceeded`
+timeout. Bumping the node instance type would fix it but costs more to run — not done here
+on purpose; revisit only if this cluster needs to run medium/large workspaces regularly.
+
 ## Prerequisites
 
 - `coder-demo-eks` deployed and reachable.
