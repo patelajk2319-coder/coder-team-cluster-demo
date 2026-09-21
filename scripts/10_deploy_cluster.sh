@@ -18,8 +18,10 @@ if [[ ! -f "${ROOT_DIR}/.env" ]]; then
   error ".env not found — copy .env.example and fill in values"
   exit 1
 fi
+set -a
 # shellcheck source=/dev/null
-set -a; source "${ROOT_DIR}/.env"; set +a
+source "${ROOT_DIR}/.env"
+set +a
 
 section "Initialising Terraform (terraform/cluster)..."
 terraform -chdir="${TF_DIR}" init -upgrade

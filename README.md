@@ -54,9 +54,10 @@ on purpose; revisit only if this cluster needs to run medium/large workspaces re
 
 - `coder-demo-eks` deployed and reachable.
 - A provisioner key minted by whoever administers that control plane
-  (`coder provisioner keys create <name> --tag team=<name>` — this repo
-  doesn't create its own key; that's a control-plane governance action).
-- `terraform`, `awscli`, `kubectl`, `go-task` installed locally.
+  (`task coder-config` in `coder-demo-eks`, via the `coderd_provisioner_key`
+  Terraform resource — this repo doesn't create its own key; that's a
+  control-plane governance action).
+- `terraform`, `awscli`, `kubectl`, `go-task`, `shellcheck` installed locally.
 
 ## Quick start
 
@@ -77,5 +78,5 @@ Confirm it registered from the control plane: `coder provisioner list`.
 | `task cluster`    | Deploy the EKS cluster (subnets, EKS, logs)                            |
 | `task provisioner`| Deploy the EBS CSI driver, `gp3` StorageClass, and the provisioner     |
 | `task up`         | Both of the above, in order                                            |
-| `task validate`   | `terraform fmt`/`validate` for both directories                        |
+| `task validate`   | `terraform fmt`/`validate` for both directories, plus shellcheck       |
 | `task nuke`       | Destroy this cluster (control plane untouched)                        |

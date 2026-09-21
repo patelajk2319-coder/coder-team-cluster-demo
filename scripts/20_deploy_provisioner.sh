@@ -16,8 +16,10 @@ if [[ ! -f "${ROOT_DIR}/.env" ]]; then
   error ".env not found — copy .env.example and fill in values"
   exit 1
 fi
+set -a
 # shellcheck source=/dev/null
-set -a; source "${ROOT_DIR}/.env"; set +a
+source "${ROOT_DIR}/.env"
+set +a
 
 : "${CODER_URL:?CODER_URL must be set in .env}"
 : "${CODER_PROVISIONER_KEY:?CODER_PROVISIONER_KEY must be set in .env — ask the platform team to mint one}"

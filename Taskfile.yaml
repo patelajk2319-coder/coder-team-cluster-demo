@@ -32,12 +32,13 @@ tasks:
       - task: provisioner
 
   validate:
-    desc: Terraform fmt + validate for both terraform/cluster and terraform/provisioner
+    desc: Terraform fmt + validate for both terraform/cluster and terraform/provisioner, plus shellcheck
     cmds:
-      - terraform -chdir=terraform/cluster fmt -check
+      - terraform -chdir=terraform/cluster fmt -check -diff
       - terraform -chdir=terraform/cluster validate
-      - terraform -chdir=terraform/provisioner fmt -check
+      - terraform -chdir=terraform/provisioner fmt -check -diff
       - terraform -chdir=terraform/provisioner validate
+      - shellcheck scripts/*.sh scripts/lib/*.sh scripts/tools/*.sh
 
   nuke:
     desc: Destroy this team's cluster and provisioner (control plane untouched)

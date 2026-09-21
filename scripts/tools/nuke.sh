@@ -17,8 +17,10 @@ if [[ ! -f "${ROOT_DIR}/.env" ]]; then
   error ".env not found"
   exit 1
 fi
+set -a
 # shellcheck source=/dev/null
-set -a; source "${ROOT_DIR}/.env"; set +a
+source "${ROOT_DIR}/.env"
+set +a
 
 # Destroy the provisioner first, while the cluster it's deployed onto still
 # exists — the kubernetes/helm providers here are configured against it.
