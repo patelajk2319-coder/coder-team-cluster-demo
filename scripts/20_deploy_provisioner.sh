@@ -23,7 +23,6 @@ set +a
 
 : "${CODER_URL:?CODER_URL must be set in .env}"
 : "${CODER_PROVISIONER_KEY:?CODER_PROVISIONER_KEY must be set in .env — ask the platform team to mint one}"
-: "${TEAM_CLUSTER_NAME:?TEAM_CLUSTER_NAME must be set in .env — run task cluster first}"
 
 section "Initialising Terraform (terraform/provisioner)..."
 terraform -chdir="${TF_DIR}" init -upgrade

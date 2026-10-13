@@ -54,13 +54,6 @@ if ! kubectl wait --for=condition=Ready node --all --timeout=120s; then
 fi
 kubectl get nodes
 
-section "Updating .env with cluster name..."
-if grep -q "^TEAM_CLUSTER_NAME=" "${ROOT_DIR}/.env"; then
-  sed -i '' "s|^TEAM_CLUSTER_NAME=.*|TEAM_CLUSTER_NAME=${CLUSTER_NAME}|" "${ROOT_DIR}/.env"
-else
-  echo "TEAM_CLUSTER_NAME=${CLUSTER_NAME}" >> "${ROOT_DIR}/.env"
-fi
-
 echo ""
 info "Cluster is ready"
 info "Run: task provisioner"
