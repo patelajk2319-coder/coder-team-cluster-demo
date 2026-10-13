@@ -36,11 +36,15 @@ brew install terraform awscli kubectl go-task shellcheck
 Copy `.env.example` to `.env`.
 
 **You fill in:**
-- `AWS_PROFILE` — your AWS CLI profile
-- `PLATFORM_REGION` / `PLATFORM_VPC_NAME` / `PLATFORM_CLUSTER_NAME` — the
-  control plane's infrastructure (see Control Plane above)
-- `CODER_URL` — the control plane's Coder URL
-- `CODER_PROVISIONER_KEY` — the provisioner key minted by the control plane
+
+| Variable Name | Description |
+|----------------|-------------|
+| `AWS_PROFILE` | Your AWS CLI profile |
+| `PLATFORM_REGION` | Control plane's AWS region |
+| `PLATFORM_VPC_NAME` | Control plane's VPC name |
+| `PLATFORM_CLUSTER_NAME` | Control plane's EKS cluster name |
+| `CODER_URL` | Control plane's Coder URL |
+| `CODER_PROVISIONER_KEY` | Provisioner key minted by the control plane |
 
 **Written by the deploy scripts — leave blank:** `TEAM_CLUSTER_NAME`.
 
