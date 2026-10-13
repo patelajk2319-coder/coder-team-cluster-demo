@@ -8,7 +8,11 @@ provider "aws" {
 
 data "aws_vpc" "platform" {
   provider = aws.platform
-  id       = data.terraform_remote_state.platform.outputs.vpc_id
+
+  filter {
+    name   = "tag:Name"
+    values = [var.platform_vpc_name]
+  }
 }
 
 data "aws_route_table" "platform_public" {

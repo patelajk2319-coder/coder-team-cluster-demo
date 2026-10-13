@@ -34,7 +34,6 @@ fi
 
 section "Destroying VPC subnets, EKS cluster, and CloudWatch logs..."
 terraform -chdir="${CLUSTER_TF_DIR}" destroy -auto-approve \
-  -var="platform_state_path=${PLATFORM_STATE_PATH:-}" \
   -var="platform_region=${PLATFORM_REGION:-}" \
   -var="platform_vpc_name=${PLATFORM_VPC_NAME:-}" \
   -var="platform_cluster_name=${PLATFORM_CLUSTER_NAME:-}" \

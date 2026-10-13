@@ -1,11 +1,6 @@
 # The control plane this cluster peers with — see peering.tf. No sensible
 # default; every value here is specific to whichever platform repo you're
-# pairing with, so all four are required.
-
-variable "platform_state_path" {
-  description = "Path to the control plane's core-infra Terraform state file"
-  type        = string
-}
+# pairing with, so all three are required.
 
 variable "platform_region" {
   description = "AWS region the control plane runs in"

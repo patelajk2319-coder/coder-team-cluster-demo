@@ -13,12 +13,3 @@ terraform {
 provider "aws" {
   region = local.aws_region
 }
-
-# Assumes both repos are sibling directories on the same machine — a real
-# cross-team setup would use a shared remote backend instead.
-data "terraform_remote_state" "platform" {
-  backend = "local"
-  config = {
-    path = var.platform_state_path
-  }
-}

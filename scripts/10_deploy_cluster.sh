@@ -21,7 +21,6 @@ set -a
 source "${ROOT_DIR}/.env"
 set +a
 
-: "${PLATFORM_STATE_PATH:?PLATFORM_STATE_PATH must be set in .env}"
 : "${PLATFORM_REGION:?PLATFORM_REGION must be set in .env}"
 : "${PLATFORM_VPC_NAME:?PLATFORM_VPC_NAME must be set in .env}"
 : "${PLATFORM_CLUSTER_NAME:?PLATFORM_CLUSTER_NAME must be set in .env}"
@@ -31,7 +30,6 @@ terraform -chdir="${TF_DIR}" init -upgrade
 
 section "Deploying VPC subnets, EKS cluster, and CloudWatch logs..."
 terraform -chdir="${TF_DIR}" apply \
-  -var="platform_state_path=${PLATFORM_STATE_PATH}" \
   -var="platform_region=${PLATFORM_REGION}" \
   -var="platform_vpc_name=${PLATFORM_VPC_NAME}" \
   -var="platform_cluster_name=${PLATFORM_CLUSTER_NAME}" \
