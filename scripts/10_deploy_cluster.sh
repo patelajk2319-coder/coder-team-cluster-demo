@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Deploy this team's own VPC, EKS cluster, CloudWatch logs, and the peering
-# connection back to the platform VPC — terraform/cluster, pure AWS, no
-# kubernetes/helm provider. Same reasoning as coder-demo-eks/terraform/core-infra:
-# the cluster can't be a kubernetes/helm provider target in the same apply
-# that creates it.
+# connection back to the control plane — terraform/cluster, pure AWS, no
+# kubernetes/helm provider (can't target a cluster that doesn't exist yet).
 
 set -euo pipefail
 
@@ -23,17 +21,27 @@ set -a
 source "${ROOT_DIR}/.env"
 set +a
 
+: "${PLATFORM_STATE_PATH:?PLATFORM_STATE_PATH must be set in .env}"
+: "${PLATFORM_REGION:?PLATFORM_REGION must be set in .env}"
+: "${PLATFORM_VPC_NAME:?PLATFORM_VPC_NAME must be set in .env}"
+: "${PLATFORM_CLUSTER_NAME:?PLATFORM_CLUSTER_NAME must be set in .env}"
+
 section "Initialising Terraform (terraform/cluster)..."
 terraform -chdir="${TF_DIR}" init -upgrade
 
 section "Deploying VPC subnets, EKS cluster, and CloudWatch logs..."
-terraform -chdir="${TF_DIR}" apply -auto-approve
+terraform -chdir="${TF_DIR}" apply \
+  -var="platform_state_path=${PLATFORM_STATE_PATH}" \
+  -var="platform_region=${PLATFORM_REGION}" \
+  -var="platform_vpc_name=${PLATFORM_VPC_NAME}" \
+  -var="platform_cluster_name=${PLATFORM_CLUSTER_NAME}" \
+  -auto-approve
 
 CLUSTER_NAME=$(terraform -chdir="${TF_DIR}" output -raw cluster_name)
 
 section "Writing kubeconfig..."
 # --region is required here — this cluster is deliberately not in the AWS
-# CLI/profile's default region (coder-demo-eks's eu-west-1).
+# CLI/profile's default region.
 aws eks update-kubeconfig \
   --name "${CLUSTER_NAME}" \
   --region eu-west-2 \

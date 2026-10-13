@@ -1,17 +1,9 @@
-# Cross-region VPC peering back to coder-demo-eks (eu-west-1), so this
-# cluster's provisioner can reach the control plane's internal NLB. This is
-# the real trade-off flagged in the architecture sketch for genuinely
-# separate infrastructure: no shared VPC means real networking work, not
-# just a data-source lookup.
-#
-# This file creates routes inside coder-demo-eks's own route tables (found
-# by tag, not by modifying that repo's Terraform) — so its blast radius
-# crosses repo boundaries. Review the plan for the `aws.platform`-provider
-# resources carefully before applying; they touch live, shared infrastructure.
+# VPC peering back to the control plane, so the provisioner can reach its
+# NLB. Touches its live route tables/SG (found by tag) — review before applying.
 
 provider "aws" {
   alias  = "platform"
-  region = "eu-west-1"
+  region = var.platform_region
 }
 
 data "aws_vpc" "platform" {
@@ -25,7 +17,7 @@ data "aws_route_table" "platform_public" {
 
   filter {
     name   = "tag:Name"
-    values = ["coder-demo-vpc-public"]
+    values = ["${var.platform_vpc_name}-public"]
   }
 }
 
@@ -35,14 +27,14 @@ data "aws_route_table" "platform_private" {
 
   filter {
     name   = "tag:Name"
-    values = ["coder-demo-vpc-private"]
+    values = ["${var.platform_vpc_name}-private"]
   }
 }
 
 resource "aws_vpc_peering_connection" "to_platform" {
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = module.vpc.vpc_id
   peer_vpc_id = data.aws_vpc.platform.id
-  peer_region = "eu-west-1"
+  peer_region = var.platform_region
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-to-platform"
@@ -64,25 +56,23 @@ resource "aws_vpc_peering_connection_accepter" "platform" {
 # ── Routes: this cluster's side ────────────────────────────────────────────────
 
 resource "aws_route" "public_to_platform" {
-  route_table_id            = aws_route_table.public.id
+  route_table_id            = module.vpc.public_route_table_ids[0]
   destination_cidr_block    = data.aws_vpc.platform.cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.to_platform.id
 }
 
 resource "aws_route" "private_to_platform" {
-  route_table_id            = aws_route_table.private.id
+  route_table_id            = module.vpc.private_route_table_ids[0]
   destination_cidr_block    = data.aws_vpc.platform.cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.to_platform.id
 }
 
-# ── Routes: the platform's side ────────────────────────────────────────────────
-# Additive only — one new route each, nothing else about these route tables
-# is touched or managed by this state.
+# ── Routes: the platform's side — additive only, one route each ───────────────
 
 resource "aws_route" "platform_public_to_team" {
   provider                  = aws.platform
   route_table_id            = data.aws_route_table.platform_public.id
-  destination_cidr_block    = aws_vpc.main.cidr_block
+  destination_cidr_block    = module.vpc.vpc_cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.to_platform.id
 
   depends_on = [aws_vpc_peering_connection_accepter.platform]
@@ -91,22 +81,20 @@ resource "aws_route" "platform_public_to_team" {
 resource "aws_route" "platform_private_to_team" {
   provider                  = aws.platform
   route_table_id            = data.aws_route_table.platform_private.id
-  destination_cidr_block    = aws_vpc.main.cidr_block
+  destination_cidr_block    = module.vpc.vpc_cidr_block
   vpc_peering_connection_id = aws_vpc_peering_connection.to_platform.id
 
   depends_on = [aws_vpc_peering_connection_accepter.platform]
 }
 
 # ── Security group rule: allow this cluster to reach the NLB's listener ──────
-# Found by the AWS Load Balancer Controller's own tags rather than a literal
-# ID, since it doesn't come from a Terraform output — it's a resource that
-# repo's Terraform doesn't manage directly (the controller does).
+# Found by tag, not a Terraform output — the LB controller owns this SG.
 data "aws_security_group" "platform_nlb" {
   provider = aws.platform
 
   filter {
     name   = "tag:elbv2.k8s.aws/cluster"
-    values = ["coder-demo-eks"]
+    values = [var.platform_cluster_name]
   }
   filter {
     name   = "tag:service.k8s.aws/resource"
@@ -120,6 +108,6 @@ resource "aws_vpc_security_group_ingress_rule" "platform_nlb_from_team" {
   ip_protocol       = "tcp"
   from_port         = 80
   to_port           = 80
-  cidr_ipv4         = aws_vpc.main.cidr_block
+  cidr_ipv4         = module.vpc.vpc_cidr_block
   description       = "coder-team-demo-eks - external provisioner"
 }

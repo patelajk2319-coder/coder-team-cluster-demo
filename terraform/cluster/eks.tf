@@ -1,171 +1,114 @@
-# Adapted from coder-demo-eks/terraform/core-infra/modules/eks — same shape,
-# inlined here rather than shared as a cross-repo module source (this repo is
-# meant to be independently cloneable by a team that doesn't have
-# coder-demo-eks checked out at all).
+# Registry module, not hand-rolled.
 
-data "aws_caller_identity" "current" {}
+# The module sets bootstrap_self_managed_addons = false, unlike a plain
+# aws_eks_cluster — vpc-cni/kube-proxy need before_compute to bootstrap nodes.
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~> 21.0"
 
-locals {
-  # Access entries need the real IAM role ARN, not the STS assumed-role
-  # session ARN aws_caller_identity returns for SSO/assumed-role callers.
-  # String surgery isn't enough either — SSO roles have a path
-  # (/aws-reserved/sso.amazonaws.com/...) the assumed-role ARN omits, so look
-  # the role up by name instead.
-  caller_arn        = data.aws_caller_identity.current.arn
-  caller_is_assumed = can(regex("^arn:aws:sts::[0-9]+:assumed-role/", local.caller_arn))
-  caller_role_name  = local.caller_is_assumed ? split("/", local.caller_arn)[1] : null
+  name               = "${local.name_prefix}-eks"
+  kubernetes_version = var.kubernetes_version
 
-  deployer_principal_arn = local.caller_is_assumed ? data.aws_iam_role.deployer[0].arn : local.caller_arn
-}
+  vpc_id                   = module.vpc.vpc_id
+  subnet_ids               = module.vpc.private_subnets
+  control_plane_subnet_ids = concat(module.vpc.public_subnets, module.vpc.private_subnets)
 
-data "aws_iam_role" "deployer" {
-  count = local.caller_is_assumed ? 1 : 0
-  name  = local.caller_role_name
-}
-
-# ── Cluster IAM role ───────────────────────────────────────────────────────────
-
-resource "aws_iam_role" "cluster" {
-  name = "${local.name_prefix}-cluster-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "eks.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "cluster_policy" {
-  role       = aws_iam_role.cluster.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
-}
-
-# ── EKS cluster ─────────────────────────────────────────────────────────────────
-
-resource "aws_eks_cluster" "main" {
-  name     = "${local.name_prefix}-eks"
-  role_arn = aws_iam_role.cluster.arn
-  version  = var.kubernetes_version
-
-  vpc_config {
-    subnet_ids              = concat(aws_subnet.public[*].id, aws_subnet.private[*].id)
-    endpoint_public_access  = true
-    endpoint_private_access = true
-  }
+  endpoint_public_access  = true
+  endpoint_private_access = true
 
   # Modern IAM-native cluster access (replaces the legacy aws-auth ConfigMap).
-  access_config {
-    authentication_mode = "API"
+  authentication_mode = "API"
+
+  # Grants the deployer cluster-admin — resolves the real IAM role ARN for
+  # SSO/assumed-role callers internally (aws_iam_session_context).
+  enable_cluster_creator_admin_permissions = true
+
+  enabled_log_types = ["api", "audit", "authenticator"]
+
+  create_cloudwatch_log_group            = true
+  cloudwatch_log_group_retention_in_days = var.log_retention_days
+
+  enable_irsa = true
+
+  addons = {
+    vpc-cni = {
+      before_compute = true
+    }
+    kube-proxy = {
+      before_compute = true
+    }
+    # Every pool is tainted — no untainted fallback for CoreDNS to land on.
+    coredns = {
+      configuration_values = jsonencode({
+        nodeSelector = { "coder.com/node-pool" = "system" }
+        tolerations = [
+          { key = "CriticalAddonsOnly", operator = "Exists" },
+          { key = "node-role.kubernetes.io/control-plane", effect = "NoSchedule" },
+          { key = "coder.com/node-pool", operator = "Equal", value = "system", effect = "NoSchedule" },
+        ]
+      })
+    }
   }
 
-  enabled_cluster_log_types = ["api", "audit", "authenticator"]
+  # Dedicated node pools, labeled + tainted — see README's Node Pools section.
+  eks_managed_node_groups = {
+    system = {
+      instance_types = [var.node_instance_type]
 
-  # log-group tag has no functional effect on the cluster — it exists purely
-  # to create an implicit dependency on the pre-created CloudWatch log group,
-  # so this resource waits for it. Without it, EKS auto-creates its own copy
-  # (no retention set) the moment control-plane logging starts.
-  tags = merge(local.common_tags, {
-    log-group = aws_cloudwatch_log_group.eks_cluster.name
-  })
+      min_size     = var.node_min_count
+      max_size     = var.node_max_count
+      desired_size = var.node_desired_count
 
-  depends_on = [aws_iam_role_policy_attachment.cluster_policy]
-}
+      labels = {
+        "coder.com/node-pool" = "system"
+      }
+      taints = {
+        dedicated = {
+          key    = "coder.com/node-pool"
+          value  = "system"
+          effect = "NO_SCHEDULE"
+        }
+      }
+    }
 
-# Grants the deploying IAM principal (whoever runs `task cluster`) cluster-admin.
-resource "aws_eks_access_entry" "deployer" {
-  cluster_name  = aws_eks_cluster.main.name
-  principal_arn = local.deployer_principal_arn
-}
+    provisioner = {
+      instance_types = [var.provisioner_node_instance_type]
 
-resource "aws_eks_access_policy_association" "deployer_admin" {
-  cluster_name  = aws_eks_cluster.main.name
-  principal_arn = local.deployer_principal_arn
-  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+      min_size     = var.provisioner_node_min_count
+      max_size     = var.provisioner_node_max_count
+      desired_size = var.provisioner_node_desired_count
 
-  access_scope {
-    type = "cluster"
-  }
-}
+      labels = {
+        "coder.com/node-pool" = "provisioner"
+      }
+      taints = {
+        dedicated = {
+          key    = "coder.com/node-pool"
+          value  = "provisioner"
+          effect = "NO_SCHEDULE"
+        }
+      }
+    }
 
-# ── OIDC provider — enables IRSA (IAM Roles for Service Accounts) ──────────────
+    workspaces = {
+      instance_types = [var.workspace_node_instance_type]
 
-data "tls_certificate" "oidc" {
-  url = aws_eks_cluster.main.identity[0].oidc[0].issuer
-}
+      min_size     = var.workspace_node_min_count
+      max_size     = var.workspace_node_max_count
+      desired_size = var.workspace_node_desired_count
 
-resource "aws_iam_openid_connect_provider" "this" {
-  url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = [data.tls_certificate.oidc.certificates[0].sha1_fingerprint]
-
-  tags = local.common_tags
-}
-
-# ── Node group IAM role ────────────────────────────────────────────────────────
-
-resource "aws_iam_role" "node" {
-  name = "${local.name_prefix}-node-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "ec2.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-
-  tags = local.common_tags
-}
-
-resource "aws_iam_role_policy_attachment" "node_worker" {
-  role       = aws_iam_role.node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
-}
-
-resource "aws_iam_role_policy_attachment" "node_cni" {
-  role       = aws_iam_role.node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
-}
-
-resource "aws_iam_role_policy_attachment" "node_ecr" {
-  role       = aws_iam_role.node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-}
-
-# ── System node group ──────────────────────────────────────────────────────────
-
-resource "aws_eks_node_group" "system" {
-  cluster_name    = aws_eks_cluster.main.name
-  node_group_name = "system"
-  node_role_arn   = aws_iam_role.node.arn
-  subnet_ids      = aws_subnet.private[*].id
-  instance_types  = [var.node_instance_type]
-
-  scaling_config {
-    desired_size = var.node_desired_count
-    min_size     = var.node_min_count
-    max_size     = var.node_max_count
-  }
-
-  update_config {
-    max_unavailable = 1
-  }
-
-  lifecycle {
-    ignore_changes = [scaling_config[0].desired_size]
+      labels = {
+        "coder.com/node-pool" = "workspaces"
+      }
+      taints = {
+        dedicated = {
+          key    = "coder.com/node-pool"
+          value  = "workspaces"
+          effect = "NO_SCHEDULE"
+        }
+      }
+    }
   }
 
   tags = local.common_tags
-
-  depends_on = [
-    aws_iam_role_policy_attachment.node_worker,
-    aws_iam_role_policy_attachment.node_cni,
-    aws_iam_role_policy_attachment.node_ecr,
-  ]
 }

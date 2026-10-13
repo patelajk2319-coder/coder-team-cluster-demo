@@ -1,50 +1,42 @@
 # ── EBS CSI Driver ──────────────────────────────────────────────────────────────
-# Provides dynamic PersistentVolume provisioning for workspace home directories —
-# adapted from coder-demo-eks/terraform/addons/modules/addons — same shape,
-# scoped to this cluster's own OIDC provider.
+# Registry IAM submodule, not a hand-written trust policy.
 
-data "aws_iam_policy_document" "ebs_csi_assume" {
-  statement {
-    effect  = "Allow"
-    actions = ["sts:AssumeRoleWithWebIdentity"]
+module "ebs_csi_irsa" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts"
+  version = "~> 6.0"
 
-    principals {
-      type        = "Federated"
-      identifiers = [data.terraform_remote_state.cluster.outputs.oidc_provider_arn]
-    }
+  name = "${data.terraform_remote_state.cluster.outputs.cluster_name}-ebs-csi"
 
-    condition {
-      test     = "StringEquals"
-      variable = "${data.terraform_remote_state.cluster.outputs.oidc_provider_url}:sub"
-      values   = ["system:serviceaccount:kube-system:ebs-csi-controller-sa"]
-    }
-
-    condition {
-      test     = "StringEquals"
-      variable = "${data.terraform_remote_state.cluster.outputs.oidc_provider_url}:aud"
-      values   = ["sts.amazonaws.com"]
+  oidc_providers = {
+    main = {
+      provider_arn               = data.terraform_remote_state.cluster.outputs.oidc_provider_arn
+      namespace_service_accounts = ["kube-system:ebs-csi-controller-sa"]
     }
   }
-}
 
-resource "aws_iam_role" "ebs_csi" {
-  name               = "${data.terraform_remote_state.cluster.outputs.cluster_name}-ebs-csi"
-  assume_role_policy = data.aws_iam_policy_document.ebs_csi_assume.json
-  tags               = var.tags
-}
+  attach_ebs_csi_policy = true
 
-resource "aws_iam_role_policy_attachment" "ebs_csi" {
-  role       = aws_iam_role.ebs_csi.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEBSCSIDriverPolicy"
+  tags = var.tags
 }
 
 resource "aws_eks_addon" "ebs_csi" {
   cluster_name             = data.terraform_remote_state.cluster.outputs.cluster_name
   addon_name               = "aws-ebs-csi-driver"
-  service_account_role_arn = aws_iam_role.ebs_csi.arn
+  service_account_role_arn = module.ebs_csi_irsa.arn
   tags                     = var.tags
 
-  depends_on = [aws_iam_role_policy_attachment.ebs_csi]
+  # Only the controller Deployment is pinned — the node plugin (a DaemonSet)
+  # must keep running everywhere, workspaces pool included.
+  configuration_values = jsonencode({
+    controller = {
+      nodeSelector = { "coder.com/node-pool" = "system" }
+      tolerations = [
+        { key = "CriticalAddonsOnly", operator = "Exists" },
+        { operator = "Exists", effect = "NoExecute", tolerationSeconds = 300 },
+        { key = "coder.com/node-pool", operator = "Equal", value = "system", effect = "NoSchedule" },
+      ]
+    }
+  })
 }
 
 resource "kubernetes_storage_class" "gp3" {
@@ -68,11 +60,7 @@ resource "kubernetes_storage_class" "gp3" {
 }
 
 # ── Coder external provisioner ─────────────────────────────────────────────────
-# Registers with the control-plane coderd (coder-demo-eks) over an
-# outbound-only connection — coderd never dials into this cluster. The
-# provisioner tag that routes workspace builds here is baked into the key
-# itself at creation time (coder provisioner keys create --tag ...), not
-# configured here.
+# Outbound-only connection to coderd — it never dials into this cluster.
 
 resource "kubernetes_namespace" "coder_provisioner" {
   metadata {
@@ -92,11 +80,7 @@ resource "kubernetes_secret" "provisioner_key" {
 }
 
 # ── Cluster-scoped RBAC for workspace provisioning ─────────────────────────────
-# Same shape as coder-demo-eks/terraform/coder's coder_workspace_provisioner
-# ClusterRole, bound to this cluster's own provisioner service account
-# instead of coderd's — the chart creates a service account named after the
-# release ("coder-provisioner") in its own namespace, and it starts with no
-# permissions beyond what the chart itself grants.
+# Bound to this cluster's own provisioner service account.
 
 resource "kubernetes_cluster_role" "workspace_provisioner" {
   metadata {
@@ -165,8 +149,7 @@ resource "helm_release" "provisioner" {
   }
 
   # Chart default is 2 CPU / 4Gi per replica — real overkill for a daemon
-  # that's mostly idle between builds, and too big to fit two of these
-  # m6i.large nodes at once alongside everything else already running.
+  # that's mostly idle between builds.
   set {
     name  = "coder.resources.requests.cpu"
     value = "250m"
@@ -183,6 +166,24 @@ resource "helm_release" "provisioner" {
     name  = "coder.resources.limits.memory"
     value = "1Gi"
   }
+
+  # Pin to the dedicated provisioner node pool, isolated from both the
+  # system pool and the workspace pods it builds.
+  values = [
+    yamlencode({
+      coder = {
+        nodeSelector = { "coder.com/node-pool" = "provisioner" }
+        tolerations = [
+          {
+            key      = "coder.com/node-pool"
+            operator = "Equal"
+            value    = "provisioner"
+            effect   = "NoSchedule"
+          }
+        ]
+      }
+    }),
+  ]
 
   wait    = true
   timeout = 300

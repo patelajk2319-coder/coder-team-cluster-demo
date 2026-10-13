@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Destroy this team cluster and its provisioner — leaves the control plane
-# (coder-demo-eks) untouched. Remember to also delete the provisioner key on
-# the control plane (coder provisioner keys delete) once this is torn down.
+# untouched. Remember to also delete the provisioner key there
+# (coder provisioner keys delete) once this is torn down.
 
 set -euo pipefail
 
@@ -34,6 +34,10 @@ fi
 
 section "Destroying VPC subnets, EKS cluster, and CloudWatch logs..."
 terraform -chdir="${CLUSTER_TF_DIR}" destroy -auto-approve \
+  -var="platform_state_path=${PLATFORM_STATE_PATH:-}" \
+  -var="platform_region=${PLATFORM_REGION:-}" \
+  -var="platform_vpc_name=${PLATFORM_VPC_NAME:-}" \
+  -var="platform_cluster_name=${PLATFORM_CLUSTER_NAME:-}" \
   || warn "Destroying terraform/cluster failed — some resources may require manual cleanup"
 
 section "Clearing local terraform/provisioner state..."

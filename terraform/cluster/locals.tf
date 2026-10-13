@@ -1,11 +1,8 @@
 locals {
   name_prefix = "coder-team-demo"
 
-  # Fixed, not a variable — this is the whole point of this cluster: a team's
-  # own region, deliberately different from coder-demo-eks's eu-west-1. That
-  # means no shared VPC — this repo creates its own, connected back to the
-  # control plane via VPC peering (see peering.tf) rather than living inside
-  # the same network.
+  # Fixed, not a variable — deliberately a different region from the
+  # control plane's, hence the VPC peering in peering.tf.
   aws_region = "eu-west-2"
 
   common_tags = merge(var.tags, {

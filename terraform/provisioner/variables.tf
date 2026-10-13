@@ -1,6 +1,5 @@
-# Minted on the control plane (coder-demo-eks) by a platform admin — this
-# team never gets broader Coder credentials than this one scoped key.
-# See coder-demo-eks/scripts/tools/create_provisioner_key.sh.
+# Minted on the control plane via coderd_provisioner_key (task coder-config)
+# — this team never gets broader Coder credentials than this one scoped key.
 variable "coder_provisioner_key" {
   description = "Provisioner key issued by the control-plane Coder instance"
   type        = string
@@ -18,10 +17,8 @@ variable "provisioner_replicas" {
   default     = 1
 }
 
-# Must match the control plane's Coder version — the provisioner protocol
-# isn't forward-compatible (a newer daemon can speak a protocol version the
-# server doesn't understand yet, and registration fails outright rather than
-# just warning).
+# Must match the control plane's Coder version — the build protocol isn't
+# forward-compatible, so a mismatch fails registration outright.
 variable "coder_version" {
   description = "coder-provisioner chart version — must match the control plane's Coder version"
   type        = string
