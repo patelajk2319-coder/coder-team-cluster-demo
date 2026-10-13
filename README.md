@@ -46,7 +46,11 @@ Copy `.env.example` to `.env`.
 | `CODER_URL` | Control plane's Coder URL |
 | `CODER_PROVISIONER_KEY` | Provisioner key minted by the control plane |
 
-**Written by the deploy scripts — leave blank:** `TEAM_CLUSTER_NAME`.
+**Written by the deploy scripts — leave blank:**
+
+| Variable Name | Description |
+|----------------|-------------|
+| `TEAM_CLUSTER_NAME` | This cluster's EKS cluster name — written by `task cluster` |
 
 ## Topology
 
