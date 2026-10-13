@@ -1,8 +1,8 @@
-# Deploys a second, team-owned EKS cluster in its own VPC (a different region
-# from coder-demo-eks, connected back via cross-region VPC peering — see
-# terraform/cluster/peering.tf), and registers an external Coder provisioner
-# on it — workspace builds tagged for this team land here, while the control
-# plane (coderd, Postgres, Secrets Manager) stays on coder-demo-eks untouched.
+# Deploys a team-owned EKS cluster in its own VPC, connected back to an
+# external Coder control plane via cross-region VPC peering — see
+# terraform/cluster/peering.tf — and registers an external Coder provisioner
+# on it. Workspace builds tagged for this team land here; the control plane
+# (coderd, Postgres, Secrets Manager) stays untouched.
 
 version: '3'
 

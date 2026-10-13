@@ -40,8 +40,7 @@ locals {
   aws_region = "eu-west-2"
 }
 
-# Reads this repo's own terraform/cluster state — same bridging pattern
-# terraform/cluster uses to read coder-demo-eks's core-infra state.
+# Reads this repo's own terraform/cluster state.
 data "terraform_remote_state" "cluster" {
   backend = "local"
   config = {

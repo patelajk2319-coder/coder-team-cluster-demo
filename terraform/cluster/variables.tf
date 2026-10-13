@@ -91,7 +91,7 @@ variable "provisioner_node_max_count" {
   default     = 2
 }
 
-# Sized for coder-template-api-python's "large" (4 vCPU + dind's 250m).
+# Sized for a "large" workspace template (4 vCPU + a dind sidecar's 250m).
 variable "workspace_node_instance_type" {
   description = "EC2 instance type for the workspaces node pool (actual workspace pods)"
   type        = string
