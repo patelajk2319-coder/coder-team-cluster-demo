@@ -115,3 +115,19 @@ resource "aws_vpc_security_group_ingress_rule" "platform_nlb_from_team" {
   cidr_ipv4         = module.vpc.vpc_cidr_block
   description       = "coder-team-demo-eks - external provisioner"
 }
+
+# ── Private DNS — resolve the control plane's stable Coder hostname ───────────
+# Its zone is only associated with its own VPC by default; the provisioner
+# here needs to resolve it too.
+
+data "aws_route53_zone" "platform_internal" {
+  provider     = aws.platform
+  vpc_id       = data.aws_vpc.platform.id
+  private_zone = true
+}
+
+resource "aws_route53_zone_association" "team_to_platform_internal" {
+  zone_id    = data.aws_route53_zone.platform_internal.zone_id
+  vpc_id     = module.vpc.vpc_id
+  vpc_region = local.aws_region
+}
