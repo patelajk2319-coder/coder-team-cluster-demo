@@ -181,6 +181,35 @@ resource "helm_release" "provisioner" {
             effect   = "NoSchedule"
           }
         ]
+
+        # Unlike the main coder chart, this one's affinity default is empty
+        # -- added explicitly so replicas spread across nodes in the pool
+        # once provisioner_replicas > 1. app.kubernetes.io/instance resolves
+        # to the Helm release name (coder-provisioner, this resource's
+        # `name` below), not "coder" -- the chart's own commented-out
+        # example uses "coder" and would silently match zero pods if copied
+        # as-is.
+        affinity = {
+          podAntiAffinity = {
+            preferredDuringSchedulingIgnoredDuringExecution = [
+              {
+                weight = 1 # 1-100, relative priority vs. other preferred rules
+                podAffinityTerm = {
+                  topologyKey = "kubernetes.io/hostname"
+                  labelSelector = {
+                    matchExpressions = [
+                      {
+                        key      = "app.kubernetes.io/instance"
+                        operator = "In"
+                        values   = ["coder-provisioner"]
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
       }
     }),
   ]
